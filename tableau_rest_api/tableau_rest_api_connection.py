@@ -1855,7 +1855,7 @@ class TableauRestApiConnection(TableauBase):
         
     def delete_groups(self, group_name_or_luid_s):
         """
-        :type project_name_or_luid_s: list[unicode] or unicode
+        :type group_name_or_luid_s: list[unicode] or unicode
         :rtype:
         """
         self.start_log_block()
