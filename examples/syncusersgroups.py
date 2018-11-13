@@ -10,7 +10,7 @@ import ConfigParser
 from sqlalchemy import create_engine, Column, String, Integer, MetaData, Table, inspect
 
 config = ConfigParser.RawConfigParser()
-config.read('syncuserstableau.properties')
+config.read('syncusersgroups.properties')
 
 sqlusr=config.get('DatabaseSection', 'database.sqlusr');
 sqlpwd=config.get('DatabaseSection', 'database.sqlpwd');
