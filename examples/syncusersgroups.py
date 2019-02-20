@@ -5,12 +5,12 @@ import time
 from tableau_tools import *
 from tableau_tools.tableau_rest_api import *
 import logging
-import pymssql
+import pyodbc
 import ConfigParser
-from sqlalchemy import create_engine, Column, String, Integer, MetaData, Table, inspect
+from sqlalchemy import create_engine, MetaData
 
 config = ConfigParser.RawConfigParser()
-config.read('syncusersgroups.properties')
+config.read('jatabsyncusers.properties')
 
 sqlusr=config.get('DatabaseSection', 'database.sqlusr');
 sqlpwd=config.get('DatabaseSection', 'database.sqlpwd');
@@ -18,12 +18,12 @@ sqldb=config.get('DatabaseSection', 'database.sqldb');
 sqlsvr=config.get('DatabaseSection', 'database.sqlsvr');
 sql_statement1=config.get('GroupsSection', 'groups.sql_statement1');
 sql_statement2=config.get('UsersSection', 'users.sql_statement2');
+sql_statement3=config.get('UsersSection', 'users.sql_statement3');
 delete_from_site=config.get('UsersSection', 'users.delete_from_site');
 username=config.get('TableauSection', 'tableau.username');
 password=config.get('TableauSection', 'tableau.password');
 server=config.get('TableauSection', 'tableau.server');
 site=config.get('TableauSection', 'tableau.site');
-ver=config.get('TableauSection', 'tableau.ver');
 
 # this will create a daily log file
 logfile = 'tableausync_' + str(time.strftime('%Y%m%d')) + '.log'
@@ -42,19 +42,12 @@ formatter = logging.Formatter('%(name)-12s|%(levelname)-8s %(message)s')
 console.setFormatter(formatter)
 # add the handler to the root logger
 logging.getLogger('').addHandler(console)
-
 logging.info('|START JOB')
 
-connstr = 'DRIVER={SQL Server};SERVER='+sqlsvr+';DATABASE='+sqldb+';UID='+sqlusr+';PWD='+sqlpwd
-conn = pymssql.connect(sqlsvr, sqlusr, sqlpwd, sqldb)
-
 metadata = MetaData()
-#engine = create_engine(connstr)
-engine = create_engine('mssql+pymssql://'+sqlusr+':'+sqlpwd+'@'+sqlsvr+':1433/'+sqldb)
+engine = create_engine('mssql+pyodbc://'+sqlusr+':'+sqlpwd+'@'+sqlsvr+'/'+sqldb+'?driver=SQL+Server+Native+Client+10.0')
 metadata.bind = engine
 count = engine.execute(sql_statement1).scalar()
-
-#logger = logging.getLogger('example.log')
 
 t = TableauRestApiConnection(server, username, password, site_content_url=site)
 logger = Logger(u"log_file.txt")
@@ -93,36 +86,30 @@ for g in groups_dict:
 # Get all the users on the site
 users = t.query_users()
 users_dict = t.convert_xml_list_to_name_id_dict(users)
-
-result = db_connection.execute(sql_statement2)
+result = db_connection.execute(sql_statement3)
 # Loop through users, make sure they exist
 for row in result:
-    if row[0] not in users_dict:
-        logging.info('|Creating USER {}'.format(row[0].encode('utf8')))
-        luid = t.add_user(row[0], row[1], site_role=u'Interactor')
-        #luid = t.add_user(row[0], row[1], site_role=u'Explorer')
-        users_dict[row[0]] = luid
+    logging.info('|CREATE/UPDATE USER {}'.format(row[0].encode('utf8'))+" - " + row[2])
+    luid = t.add_user(row[0], row[1], site_role=u'Interactor', email=row[2],update_if_exists=True)
+    #luid = t.add_user(row[0], row[1], site_role=u'Explorer')
+    users_dict[row[0]] = luid
 
 # For the check of who shouldn't be on the server
-
 # List of usernames who should be in the system
-usernames = {}
+usernames = []
 # Add users who are missing from a group
-
 result = db_connection.execute(sql_statement2)
 for row in result:
     user_luid = users_dict.get(row[0])
     group_luid = groups_dict.get(row[2])
     #print row[2] + ' (' + str(group_luid) + ')'
-    usernames[row[0]] = None
+    usernames.append(str(row[0]))
     # Make a data structure where we can check each group that exists on server
     groups_and_users[row[2]].append(row[0])
-
     logging.info('|Adding user {} to GROUP {} ({})'.format(row[0].encode('utf8'), row[2].encode('utf8'), group_luid.encode('utf8')))
     t.add_users_to_group(user_luid, group_luid)
+    t.update_user(user_luid, site_role=u'Interactor', email=row[3])
 
-conn.close()
-#print groups_and_users
 # Determine if any users are in a group who do not belong, then remove them
 for group in groups_and_users:
     if group == groups_dict[u'All Users']:
@@ -131,7 +118,6 @@ for group in groups_and_users:
         users_in_group_on_server = t.query_users_in_group(group)
         users_in_group_on_server_dict = t.convert_xml_list_to_name_id_dict(users_in_group_on_server)
         # values() are the LUIDs in these dicts
-
         for user in users_in_group_on_server_dict.values():
             uname = str(t.convert_xml_list_to_name_id_dict(t.query_user(user)).keys()).replace("['","").replace("']","")
             #gname = str(t.query_group_name(group_luid))
@@ -154,7 +140,6 @@ for user_on_server in users_on_server:
         continue
     if user_on_server.get("name") not in usernames:
         if user_on_server.get("siteRole") not in [u'ServerAdministrator', u'SiteAdministrator', u'Publisher', u'Creator', u'SiteAdministratorCreator', u'SiteAdministratorExplorer', u'ExplorerCanPublish']:
-
             if delete_from_site=="Yes":
                 # Remove users from site
                 t.remove_users_from_site(user_on_server.get("name"))
