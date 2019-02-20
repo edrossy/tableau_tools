@@ -10,7 +10,7 @@ import ConfigParser
 from sqlalchemy import create_engine, MetaData
 
 config = ConfigParser.RawConfigParser()
-config.read('jatabsyncusers.properties')
+config.read('syncuserssgroups.properties')
 
 sqlusr=config.get('DatabaseSection', 'database.sqlusr');
 sqlpwd=config.get('DatabaseSection', 'database.sqlpwd');
