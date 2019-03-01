@@ -10,7 +10,7 @@ import ConfigParser
 from sqlalchemy import create_engine, MetaData
 
 config = ConfigParser.RawConfigParser()
-config.read('syncuserssgroups.properties')
+config.read('syncusersgroups.properties')
 
 sqlusr=config.get('DatabaseSection', 'database.sqlusr');
 sqlpwd=config.get('DatabaseSection', 'database.sqlpwd');
@@ -24,6 +24,7 @@ username=config.get('TableauSection', 'tableau.username');
 password=config.get('TableauSection', 'tableau.password');
 server=config.get('TableauSection', 'tableau.server');
 site=config.get('TableauSection', 'tableau.site');
+ver=config.get('TableauSection', 'tableau.ver');
 
 # this will create a daily log file
 logfile = 'tableausync_' + str(time.strftime('%Y%m%d')) + '.log'
@@ -49,7 +50,7 @@ engine = create_engine('mssql+pyodbc://'+sqlusr+':'+sqlpwd+'@'+sqlsvr+'/'+sqldb+
 metadata.bind = engine
 count = engine.execute(sql_statement1).scalar()
 
-t = TableauRestApiConnection(server, username, password, site_content_url=site)
+t = TableauRestApiConnection(server, username, password, site_content_url=site, version=ver)
 logger = Logger(u"log_file.txt")
 t.enable_logging(logger)
 t.signin()
